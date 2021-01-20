@@ -34,7 +34,7 @@ def get_para(fin):
     return para
 
 
-def get_nframe(fin):
+def get_nframe(fin, match_all=False):
     def get_one_file_nframe(fin):
         with open(fin, "rb") as f:
             f.seek(0, 2)
@@ -46,6 +46,9 @@ def get_nframe(fin):
             n_frame = filesize // frame_size
         return n_frame
 
+    if match_all:
+        para = get_para(fin)
+        fin = get_files(para)
     if isinstance(fin, str):
         return get_one_file_nframe(fin)
     if isinstance(fin, list):
@@ -88,7 +91,7 @@ def get_files(para):
     return files
 
 
-def read_field(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
+def read_fields(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
     def read_one_file(fin, beg, end, sep, frame_idx0):
         with open(fin, "rb") as f:
             f.seek(0, 2)
@@ -113,7 +116,9 @@ def read_field(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
                     data = np.array(struct.unpack("%df" % (n * 3), buf))
                     rho_m, vx_m, vy_m = data.reshape(
                         3, ny, nx) / (para["dx"] * para["dx"])
-                    yield rho_m, vx_m, vy_m
+                    t = para['t_beg'] + (beg + 1 + frame_idx -
+                                         frame_idx0) * para["dt"]
+                    yield t, rho_m, vx_m, vy_m
                 else:
                     f.seek(framesize, 1)
                 frame_idx += 1
@@ -125,7 +130,7 @@ def read_field(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
         files = get_files(para)
         nframe = get_nframe(files)
         print("total frames:", np.sum(nframe))
-        print(nframe)
+        print("frames:", nframe)
 
         beg_cur_file = 0
         end_cur_file = 0
@@ -149,7 +154,7 @@ def read_field(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
                 end_cur_file += nframe[j]
                 print(files[j])
                 if end is None or end > end_cur_file:
-                    yield from read_one_file(files[j], 0, None, sep, beg)
+                    yield from read_one_file(files[j], 0, nframe[j], sep, beg)
                 else:
                     my_end = end - beg_cur_file
                     yield from read_one_file(files[j], 0, my_end, sep, beg)
@@ -159,6 +164,6 @@ def read_field(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
 if __name__ == "__main__":
     f0 = "fields/9600_2400_0.290_1.000_0.5_411_8_10000_0.bin"
 
-    frames = read_field(f0, single_file=False, beg=4700, end=4800)
+    frames = read_fields(f0, single_file=False, beg=4700, end=4800)
     for i, frame in enumerate(frames):
         print(i)

@@ -1,10 +1,15 @@
 import numpy as np
+import os
 from plot_snap import read_snap, plot_snap, get_para
 
 
-def clone(fin, nx=1, ny=1):
+def duplicate(fin, nx=1, ny=1, rot_90_CW=False):
     para0 = get_para(fin)
     x0, y0, theta0 = read_snap(fin)
+    if rot_90_CW:
+        x0, y0 = y0, -x0
+        y0 += para0["Lx"]
+        theta0 += np.pi / 2
     para_new = {key: para0[key] for key in para0}
     para_new["Lx"] *= nx
     para_new["Ly"] *= ny
@@ -18,7 +23,7 @@ def clone(fin, nx=1, ny=1):
         size_new = N0 * nx * ny
     else:
         size_new = N_new
-    x, y, theta = np.zeros((3, size_new))
+    x, y, theta = np.zeros((3, size_new), np.float32)
     for row in range(ny):
         dy = row * para0["Ly"]
         for col in range(nx):
@@ -38,15 +43,17 @@ def clone(fin, nx=1, ny=1):
             x[j] = np.random.rand() * para_new["Lx"]
             y[j] = np.random.rand() * para_new["Ly"]
             theta[j] = np.random.rand() * np.pi * 2.
-    plot_snap(x0, y0, theta0, para0, 0.01)
-    plot_snap(x, y, theta, para_new, 0.01/(nx * ny))
+    plot_snap(x0, y0, theta0, para0, frac=0.01)
+    plot_snap(x, y, theta, para_new, frac=0.01 / (nx * ny))
 
+    if not os.path.exists("snap/duplicated"):
+        os.mkdir("snap/duplicated")
     if para_new["Lx"] == para_new["Ly"]:
-        fout = "snap/cloned/s%d_%.3f_%.3f_%.1f_%d_%08d.bin" % (
+        fout = "snap/duplicated/s%d_%.3f_%.3f_%.1f_%d_%08d.bin" % (
             para_new["Lx"], para_new["eta"], para_new["rho0"], para_new["v0"],
             para_new["seed"], para_new["t"])
     else:
-        fout = "snap/cloned/s%d_%d_%.3f_%.3f_%.1f_%d_%08d.bin" % (
+        fout = "snap/duplicated/s%d_%d_%.3f_%.3f_%.1f_%d_%08d.bin" % (
             para_new["Lx"], para_new["Ly"], para_new["eta"], para_new["rho0"],
             para_new["v0"], para_new["seed"], para_new["t"])
 
@@ -59,11 +66,133 @@ def clone(fin, nx=1, ny=1):
     data.tofile(fout)
 
 
+def slice(x, y, theta, rect, shift=False):
+    xmin, xmax, ymin, ymax = rect
+    mask = y >= ymin
+    x = x[mask]
+    y = y[mask]
+    theta = theta[mask]
+    mask = y < ymax
+    x = x[mask]
+    y = y[mask]
+    theta = theta[mask]
+    mask = x >= xmin
+    x = x[mask]
+    y = y[mask]
+    theta = theta[mask]
+    mask = x < xmax
+    x = x[mask]
+    y = y[mask]
+    theta = theta[mask]
+    if shift:
+        x -= xmin
+        y -= ymin
+    return x, y, theta
+
+
+def inverse(x, y, theta, xc, yc):
+    x_inv = 2 * xc - x
+    y_inv = 2 * yc - y
+    theta_inv = theta + np.pi
+    return x_inv, y_inv, theta_inv
+
+
+def make_band_lane(x, y, theta, n_lane, width, length, direction="y"):
+    if direction == "y":
+        x_inv, y_inv, theta_inv = inverse(x, y, theta, length / 2, width / 2)
+    else:
+        x_inv, y_inv, theta_inv = inverse(x, y, theta, width / 2, length / 2)
+
+    n_new = x.size * n_lane
+    x_new, y_new, theta_new = np.zeros((3, n_new), np.float32)
+    for i_lane in range(n_lane):
+        i = i_lane * x.size
+        j = (i_lane + 1) * x.size
+        if i_lane % 2 == 0:
+            x_new[i:j] = x
+            y_new[i:j] = y
+            theta_new[i:j] = theta
+        else:
+            x_new[i:j] = x_inv
+            y_new[i:j] = y_inv
+            theta_new[i:j] = theta_inv
+        if direction == "y":
+            y_new[i:j] += i_lane * width
+        else:
+            x_new[i:j] += i_lane * width
+    return x_new, y_new, theta_new
+
+
+def create_band_lane_snap():
+    # fin = "snap/s2400_0.290_1.000_0.5_133_47200000.bin"
+    fin = "snap/s2400_0.350_1.000_0.5_411_26160000.bin"
+    para = get_para(fin)
+    if para["seed"] == 133:
+        direction = "y"
+        length = para["Lx"]
+        # width, ymin, ymax = 400, 1500, 1900
+        width, ymin, ymax = 600, 0, 600
+        rect = [0, para["Lx"], ymin, ymax]
+    else:
+        direction = "x"
+        length = para["Ly"]
+        width, xmin, xmax = 400, 1500, 1900
+        rect = [xmin, xmax, 0, para["Ly"]]
+    x, y, theta = read_snap(fin)
+    x, y, theta = slice(x, y, theta, rect, shift=True)
+    n_lane = 6
+    para["Ly"] = n_lane * width
+    x, y, theta = make_band_lane(x, y, theta, n_lane, width, length, direction)
+
+    rho_new = float("%.3f" % (x.size / (para["Lx"] * para["Ly"])))
+    n_new = int(rho_new * para["Lx"] * para["Ly"])
+    print("n=", x.size, "rho=", x.size / (para["Lx"] * para["Ly"]))
+
+    if n_new <= x.size:
+        x = x[:n_new]
+        y = y[:n_new]
+        theta = theta[:n_new]
+    else:
+        n2 = n_new - x.size
+        x2 = np.random.rand(n2) * para["Lx"]
+        y2 = np.random.rand(n2) * para["Ly"]
+        theta2 = np.random.rand(n2) * np.pi * 2
+        x = np.hstack((x, x2))
+        y = np.hstack((y, y2))
+        theta = np.hstack((theta, theta2))
+        print("Warning, add", n2, "particles")
+
+    print("n=", x.size, "rho=", x.size / (para["Lx"] * para["Ly"]))
+    para["rho0"] = rho_new
+    para["seed"] = int("%d%d%d" % (2, n_lane, para["seed"]))
+    para["t"] = 0
+    print("particle number calculated from rho0",
+          int(para["rho0"] * para["Lx"] * para["Ly"]))
+    plot_snap(x, y, theta, para, frac=0.01, show_relative_angle=False)
+
+    if not os.path.exists("snap/slice"):
+        os.mkdir("snap/slice")
+
+    fout_subfix = "{eta:.3f}_{rho0:.3f}_{v0:.1f}_{seed}_{t:08d}.bin".format(
+        **para)
+    if para["Lx"] == para["Ly"]:
+        fout = f"snap/slice/s{para['Lx']}_{fout_subfix}"
+    else:
+        fout = f"snap/slice/s{para['Lx']}_{para['Ly']}_{fout_subfix}"
+    print("output new snapshot to", fout)
+    data = np.zeros((3, n_new), np.float32)
+    data[0] = x
+    data[1] = y
+    data[2] = theta
+    data = data.T.flatten()
+    data.tofile(fout)
+
+
 if __name__ == "__main__":
-    fin = "snap/s1200_0.280_1.000_0.5_132_01440000.bin"
+    # fin = "snap/s2400_0.290_1.000_0.5_133_47200000.bin"
     # x, y, theta = read_snap(fin)
     # para = get_para(fin)
-    # plot_snap(x, y, theta, para, frac=0.1)
+    # plot_snap(x, y, theta, para, frac=0.01)
 
-    # plt.show()
-    clone(fin, 8, 2)
+    # duplicate(fin, 4, 1, rot_90_CW=True)
+    create_band_lane_snap()

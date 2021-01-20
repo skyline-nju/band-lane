@@ -4,8 +4,7 @@ import matplotlib.pyplot as plt
 import glob
 import sys
 from matplotlib.colors import hsv_to_rgb
-from decode import read_field_series, \
-    get_para_field, get_matched_f0, get_last_frame
+from read_fields import get_para, read_fields
 
 
 def map_v_to_rgb(theta, module, m_max=None):
@@ -204,7 +203,8 @@ def plot_frames(f0,
                 fmt="jpg",
                 data_dir="fields",
                 which="momentum"):
-    para = get_para_field(f0)
+    # para = get_para_field(f0)
+    para = get_para(f0)
     prefix = "D:/data/lane/%s" % data_dir
     if para["Lx"] == para["Ly"]:
         folder = "%s/%.1f_%d_%.3f_%.3f_%d" % (prefix, para["v0"], para["Lx"],
@@ -239,26 +239,26 @@ def plot_frames(f0,
     existed_snap = glob.glob("%s/t=*.%s" % (folder, fmt))
     beg = len(existed_snap)
     print(beg, "snapshots have existed")
-    t_beg = (beg + 1) * para["dt"]
-    frames = read_field_series(f0, beg=beg)
-    for i, (rho, vx, vy) in enumerate(frames):
+    # t_beg = (beg + 1) * para["dt"]
+    # frames = read_field_series(f0, beg=beg)
+    frames = read_fields(f0, beg=beg)
+    for i, (t, rho, vx, vy) in enumerate(frames):
         if save_fig:
             fout = "%s/t=%04d.%s" % (folder, beg + i, fmt)
         else:
             fout = None
-        t = t_beg + i * para["dt"]
+        # t = t_beg + i * para["dt"]
         if which == "both":
             plot_density_momentum(rho, vx, vy, t, para, figsize, fout)
         elif which == "momentum":
             plot_momentum(rho, vx, vy, t, para, figsize, fout)
 
 
-def plot_all_fields_series(pat="*.bin", fmt="jpg", data_dir="fields"):
-    # os.chdir("fields")
-    f0_list = get_matched_f0(pat)
+def plot_all_fields_series(pat="*_0.bin", fmt="jpg", data_dir="fields"):
+    f0_list = glob.glob(f"fields/{pat}")
     for f0 in f0_list:
         print(f0)
-        plot_frames(f0, True, fmt=fmt, data_dir=data_dir)
+        plot_frames(f0, True, fmt=fmt, data_dir=data_dir, which="momentum")
 
 
 def set_figsize(n):
@@ -315,92 +315,7 @@ def set_figsize(n):
     return nrows, ncols, figsize
 
 
-def plot_last_frames(L, eta, rho0, v0, dx=8, save_fig=False):
-    def plot_one_panel(f0, ax, show_xticks=True, show_yticks=True):
-        t, rho, vx, vy = get_last_frame(f0)
-        im = ax.imshow(rho, origin="lower", extent=box, vmin=vmin, vmax=vmax)
-        b = int(np.log10(t))
-        a = t / 10**b
-        para = get_para_field(f0)
-        ax.set_title(f"$S{para['seed']}, t={a:g}e{b}$")
-        if not show_xticks:
-            ax.set_xticks([])
-        if not show_yticks:
-            ax.set_yticks([])
-        return im
-
-    def get_seed(elem):
-        return get_para_field(elem)["seed"]
-
-    pat = "%d_%.3f_%.3f_%.1f_1*_%d_*.bin" % (L, eta, rho0, v0, dx)
-    f0_list = get_matched_f0(pat)
-    f0_list.sort(key=get_seed)
-    n = len(f0_list)
-    print(f"L={L}, eta={eta:.3f}, rho0={rho0:.3f}, v0={v0}, IC numbers={n}")
-    nrows, ncols, figsize = set_figsize(n)
-    box = [0, L, 0, L]
-    if rho0 < 1.2:
-        vmin, vmax = None, rho0 * 4
-    else:
-        vmin, vmax = None, rho0 * 3
-    if True:
-        fig, axes = plt.subplots(nrows,
-                                 ncols,
-                                 figsize=figsize,
-                                 constrained_layout=True)
-        if n == 1:
-            plot_one_panel(f0_list[0], axes)
-        else:
-            for i, ax in enumerate(axes.flat):
-                if i < n:
-                    if i % ncols == 0:
-                        show_yticks = True
-                    else:
-                        show_yticks = False
-                    if i // ncols == nrows - 1:
-                        show_xticks = True
-                    else:
-                        show_xticks = False
-                    plot_one_panel(f0_list[i], ax, show_xticks, show_yticks)
-                else:
-                    ax.axis("off")
-
-        title = r"$L=%d, \eta=%g, \rho_0=%g, v_0=%g$" % (L, eta, rho0, v0)
-        # fig.colorbar(im, ax=axes, shrink=1)
-        plt.suptitle(title, fontsize="xx-large")
-        if save_fig:
-            root = "D:/data/cross_sea2/last_frame"
-            folder1 = "%s/v0=%.1f" % (root, v0)
-            if not os.path.exists(folder1):
-                os.mkdir(folder1)
-            folder2 = "%s/rho0=%.3f" % (folder1, rho0)
-            if not os.path.exists(folder2):
-                os.mkdir(folder2)
-            fout = "%s/%d_%.3f.jpg" % (folder2, L, eta)
-            plt.savefig(fout)
-        else:
-            plt.show()
-        plt.close()
-
-
-def plot_all_last_frames(pat="*.bin", save_fig=True):
-    files = glob.glob(pat)
-    para_list = []
-    for f in files:
-        para = get_para_field(f)
-        if para["Lx"] == para["Ly"] and int(str(para["seed"])[0]) == 1:
-            my_para = [para["Lx"], para["eta"], para["rho0"], para["v0"]]
-            if my_para not in para_list:
-                para_list.append(my_para)
-
-    for p in para_list:
-        plot_last_frames(p[0], p[1], p[2], p[3], save_fig=save_fig)
-
-
 if __name__ == "__main__":
-    data_dir = "fields"
-    # data_dir = "fields200"
-    os.chdir(data_dir)
-    plot_all_fields_series("*.bin", data_dir=data_dir, fmt="jpg")
+    plot_all_fields_series("*.bin", fmt="jpg")
 
     # plot_all_last_frames("4800_*_1.0_*_8_*.bin", True)

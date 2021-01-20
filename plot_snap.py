@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import struct
-# import glob
 import os
 
 
@@ -13,7 +12,7 @@ def read_snap(fin):
         N = filesize // 12
         buf = f.read()
         data = struct.unpack("%df" % (N * 3), buf)
-        x, y, theta = np.array(data).reshape(N, 3).T
+        x, y, theta = np.array(data, np.float32).reshape(N, 3).T
     return x, y, theta
 
 
@@ -79,7 +78,31 @@ def get_title(para):
     return title
 
 
-def plot_snap(x, y, theta, para, frac=1., idx_arr=None):
+def plot_snap(x=None,
+              y=None,
+              theta=None,
+              para=None,
+              fin=None,
+              frac=1.,
+              idx_arr=None,
+              show_relative_angle=True):
+    if fin is not None:
+        para = get_para(fin)
+        x, y, theta = read_snap(fin)
+        n = int(para['rho0'] * para["Lx"] * para["Ly"])
+        if n != x.size:
+            print("Waring,", fin, "has", x.size, "particles, but should be", n,
+                  "since rho0=", para["rho"])
+    if para is not None:
+        xmin, xmax = 0, para["Lx"]
+        ymin, ymax = 0, para["Ly"]
+        Lx, Ly = para["Lx"], para["Ly"]
+    else:
+        import math
+        xmin, xmax = x.min(), x.max()
+        ymin, ymax = math.floor(y.min()), math.ceil(y.max())
+        Lx, Ly = xmax - xmin, ymax - ymin
+        print(f"Lx={Lx}, Ly={Ly}")
     vx_m = np.mean(np.cos(theta))
     vy_m = np.mean(np.sin(theta))
     theta_m = np.arctan2(vy_m, vx_m)
@@ -92,23 +115,35 @@ def plot_snap(x, y, theta, para, frac=1., idx_arr=None):
     else:
         x1, y1, theta1 = x, y, theta
 
-    xmin, xmax = 0, para["Lx"]
-    ymin, ymax = 0, para["Ly"]
-
-    c = theta1 - theta_m
+    if show_relative_angle:
+        c = theta1 - theta_m
+        cb_label = r"$\theta - \theta_m$"
+    else:
+        c = theta1
+        cb_label = r"$\theta$"
     c[c > np.pi] -= np.pi * 2
     c[c < -np.pi] += np.pi * 2
 
-    plt.figure(figsize=(10, 8.5))
-    plt.subplot(111, fc="k")
-    plt.scatter(x1, y1, s=0.25, c=c, cmap="hsv")
+    if Lx >= 4 * Ly:
+        figsize = (14, 4)
+        cb_frac = 0.03
+    elif Lx == 2 * Ly:
+        figsize = (8, 4)
+        cb_frac = 0.05
+    else:
+        figsize = (10, 8.5)
+        cb_frac = 0.1
+    plt.figure(figsize=figsize)
+    # plt.subplot(111, fc="k")
+    sca = plt.scatter(x1, y1, s=0.25, c=c, cmap="hsv")
     plt.axis("scaled")
     plt.xlim(xmin, xmax)
     plt.ylim(ymin, ymax)
-    cb = plt.colorbar()
-    cb.set_label(r"$\theta - \theta_m$", fontsize="x-large")
-    title = get_title(para)
-    plt.suptitle(title, fontsize="xx-large")
+    cb = plt.colorbar(sca, fraction=cb_frac, shrink=1)
+    cb.set_label(cb_label, fontsize="x-large")
+    if para is not None:
+        title = get_title(para)
+        plt.suptitle(title, fontsize="xx-large")
     plt.tight_layout()
     plt.show()
     # plt.savefig("D:/data/tmp2/%04d.png" % i, dpi=300)
@@ -116,68 +151,7 @@ def plot_snap(x, y, theta, para, frac=1., idx_arr=None):
 
 
 if __name__ == "__main__":
-    fin = "v1.0/s1216.300.0.1234.0.0015.bin"
-    x, y, theta = read_snap(fin)
-    plt.figure(figsize=(10, 8))
-    xmin, xmax = 600, 800
-    ymin, ymax = 800, 1000
-
-    x, y, theta = zoom_in(x, y, theta, xmin, xmax, ymin, ymax)
-    # plt.plot(x, y, ".", ms=0.1)
-    # plt.scatter(x, y, s=0.5, c=theta, cmap="hsv")
-    plt.subplot(111, fc="k")
-    plt.scatter(x, y, s=0.5, c=np.sin(theta), vmin=-0.5, vmax=0.5, cmap="bwr")
-    plt.axis("scaled")
-    plt.xlim(xmin, xmax)
-    plt.ylim(ymin, ymax)
-    cb = plt.colorbar(extend="both")
-    cb.set_label(r"$\sin \theta$", fontsize="xx-large")
-    # cb = plt.colorbar()
-    # cb.set_label(r"$\theta$", fontsize="xx-large")
-    plt.tight_layout()
-    plt.show()
-    plt.close()
-
-    # os.chdir("snap")
-    # files = glob.glob("s2400_0.230_0.637_0.5_2133_*.bin")
-    # print(files)
-    # idx_arr = None
-    # frac = 0.01
-    # # f = files[0]
-    # for i, f in enumerate(files[:1800]):
-    #     x, y, theta = read_snap(f)
-    #     if idx_arr is None:
-    #         rng = np.random.default_rng()
-    #         idx_arr = np.arange(x.size)
-    #         rng.shuffle(idx_arr)
-    #     vx_m = np.mean(np.cos(theta))
-    #     vy_m = np.mean(np.sin(theta))
-    #     theta_m = np.arctan2(vy_m, vx_m)
-
-    #     x, y, theta = random_select(x, y, theta, frac, idx_arr)
-
-    #     para = get_para(f)
-    #     xmin, xmax = 0, para["Lx"]
-    #     ymin, ymax = 0, para["Ly"]
-    #     # x, y, theta = zoom_in(x, y, theta, xmin, xmax, ymin, ymax)
-
-    #     c = theta - theta_m
-    #     c[c > np.pi] -= np.pi * 2
-    #     c[c < -np.pi] += np.pi * 2
-
-    #     plt.figure(figsize=(10, 8.5))
-    #     plt.subplot(111, fc="k")
-    #     plt.scatter(x, y, s=0.25, c=c, cmap="hsv")
-    #     plt.axis("scaled")
-    #     plt.xlim(xmin, xmax)
-    #     plt.ylim(ymin, ymax)
-    #     cb = plt.colorbar()
-    #     cb.set_label(r"$\theta - \theta_m$", fontsize="x-large")
-    #     title = r"$L=%d,\eta=%g,\rho_0=%.4f,v_0=%g,{\rm seed}=%d,t=%d$" % (
-    #         para["L"], para["eta"], para["rho0"], para["v0"], para["seed"],
-    #         para["t"])
-    #     plt.suptitle(title, fontsize="xx-large")
-    #     plt.tight_layout()
-    #     plt.show()
-    #     # plt.savefig("D:/data/tmp2/%04d.png" % i, dpi=300)
-    #     plt.close()
+    # fin = "snap/duplicated/s9600_2400_0.350_1.000_0.5_2411_00000000.bin"
+    # fin = "snap/s2400_0.290_1.000_0.5_133_47200000.bin"
+    fin = "snap/s2400_0.350_1.000_0.5_411_26160000.bin"
+    plot_snap(fin=fin, frac=0.01, show_relative_angle=False)

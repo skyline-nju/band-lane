@@ -18,6 +18,7 @@ numpy.i
 snap/
 order_para/
 fields/
+space_time/
 # User-specific files (MonoDevelop/Xamarin Studio)
 *.userprefs
 

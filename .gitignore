@@ -14,7 +14,10 @@ VM/*.o
 *.dat
 numpy.i
 
-
+*.mp4
+*.jpg
+duplicated/
+slice/
 snap/
 order_para/
 fields/

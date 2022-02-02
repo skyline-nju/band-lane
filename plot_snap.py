@@ -16,6 +16,23 @@ def read_snap(fin):
     return x, y, theta
 
 
+def rotate(x, y, theta, angle, Lx, Ly):
+    if angle == -90:
+        x, y = y, -x
+        y += Lx
+        theta -= np.pi / 2
+    elif angle == 90:
+        x, y = -y, x
+        x += Ly
+        theta += np.pi / 2
+    elif angle == 180:
+        x, y = -x, -y
+        theta += np.pi
+        x += Lx
+        y += Ly
+    return x, y, theta
+
+
 def zoom_in(x0, y0, theta0, xmin, xmax, ymin, ymax):
     mask = x0 > xmin
     x = x0[mask]
@@ -83,9 +100,9 @@ def plot_snap(x=None,
               theta=None,
               para=None,
               fin=None,
-              frac=1.,
+              frac=0.1,
               idx_arr=None,
-              show_relative_angle=True):
+              show_relative_angle=False):
     if fin is not None:
         para = get_para(fin)
         x, y, theta = read_snap(fin)
@@ -151,7 +168,33 @@ def plot_snap(x=None,
 
 
 if __name__ == "__main__":
-    # fin = "snap/duplicated/s9600_2400_0.350_1.000_0.5_2411_00000000.bin"
-    # fin = "snap/s2400_0.290_1.000_0.5_133_47200000.bin"
-    fin = "snap/s2400_0.350_1.000_0.5_411_26160000.bin"
-    plot_snap(fin=fin, frac=0.01, show_relative_angle=False)
+    # fin = "snap/s1200_0.330_0.637_1.0_124_01120000.bin"
+    # # plot_snap(fin=fin, frac=0.1, show_relative_angle=False)
+    # para = get_para(fin)
+    # x, y, theta = read_snap(fin)
+    # x, y, theta = rotate(x, y, theta, -90, para["Lx"], para["Ly"])
+    # plot_snap(x, y, theta, para, frac=0.1, show_relative_angle=False)
+
+    # fin = "snap/s1200_0.330_0.637_1.0_125_01080000.bin"
+    # para = get_para(fin)
+    # x, y, theta = read_snap(fin)
+    # x, y, theta = rotate(x, y, theta, 90, para["Lx"], para["Ly"])
+    # plot_snap(x, y, theta, para, frac=0.1, show_relative_angle=False)
+
+    # fin = "snap/s1200_0.330_0.637_1.0_124_01120000.bin"
+    # plot_snap(fin=fin, frac=0.05)
+
+    # fin = "snap/s1200_0.330_0.637_1.0_125_01080000.bin"
+    # plot_snap(fin=fin, frac=0.05)
+
+    # fin = "duplicated/s2400_1200_0.330_0.637_1.0_2124125_00000000.bin"
+    # plot_snap(fin=fin, frac=0.05)
+
+    # fin = "duplicated/s2400_1200_0.330_0.637_1.0_2125125_00000000.bin"
+    # plot_snap(fin=fin, frac=0.05)
+
+    # fin = "duplicated/s9600_2400_0.280_1.000_0.5_241134_00000000.bin"
+    # plot_snap(fin=fin, frac=0.005)
+
+    fin = "snap/s1200_0.380_1.000_0.5_1011_00540000.bin"
+    plot_snap(fin=fin, frac=0.005)

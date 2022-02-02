@@ -91,46 +91,46 @@ def get_files(para):
     return files
 
 
-def read_fields(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
-    def read_one_file(fin, beg, end, sep, frame_idx0):
-        with open(fin, "rb") as f:
-            f.seek(0, 2)
-            filesize = f.tell()
-            para = get_para(fin)
-            nx, ny = para["Lx"] // para["dx"], para["Ly"] // para["dx"]
-            n = nx * ny
-            framesize = n * 12
-            nframe = filesize // framesize
-            if nframe * framesize != filesize:
-                print("Warning, filesize for", fin, "is", filesize,
-                      ", but should be to be", nframe * framesize)
-            f.seek(beg * framesize)
-            if end is None:
-                file_end = filesize
+def read_one_file(fin, beg, end, sep, frame_idx0):
+    with open(fin, "rb") as f:
+        f.seek(0, 2)
+        filesize = f.tell()
+        para = get_para(fin)
+        nx, ny = para["Lx"] // para["dx"], para["Ly"] // para["dx"]
+        n = nx * ny
+        framesize = n * 12
+        nframe = filesize // framesize
+        if nframe * framesize != filesize:
+            print("Warning, filesize for", fin, "is", filesize,
+                  ", but should be to be", nframe * framesize)
+        f.seek(int(beg) * int(framesize))
+        if end is None:
+            file_end = filesize
+        else:
+            file_end = int(end) * int(framesize)
+        frame_idx = frame_idx0
+        while f.tell() < file_end:
+            if frame_idx % sep == 0:
+                buf = f.read(framesize)
+                data = np.array(struct.unpack("%df" % (n * 3), buf))
+                rho_m, vx_m, vy_m = data.reshape(
+                    3, ny, nx) / (para["dx"] * para["dx"])
+                t = para['t_beg'] + (beg + 1 + frame_idx -
+                                     frame_idx0) * para["dt"]
+                yield t, rho_m, vx_m, vy_m
             else:
-                file_end = end * framesize
-            frame_idx = frame_idx0
-            while f.tell() < file_end:
-                if frame_idx % sep == 0:
-                    buf = f.read(framesize)
-                    data = np.array(struct.unpack("%df" % (n * 3), buf))
-                    rho_m, vx_m, vy_m = data.reshape(
-                        3, ny, nx) / (para["dx"] * para["dx"])
-                    t = para['t_beg'] + (beg + 1 + frame_idx -
-                                         frame_idx0) * para["dt"]
-                    yield t, rho_m, vx_m, vy_m
-                else:
-                    f.seek(framesize, 1)
-                frame_idx += 1
+                f.seek(framesize, 1)
+            frame_idx += 1
 
+
+def read_fields(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
     if single_file:
         yield from read_one_file(fin, beg, end, sep, frame_idx0)
     else:
         para = get_para(fin)
         files = get_files(para)
         nframe = get_nframe(files)
-        print("total frames:", np.sum(nframe))
-        print("frames:", nframe)
+        print("%d/%d: %s" % (beg, np.sum(nframe), files[0]))
 
         beg_cur_file = 0
         end_cur_file = 0
@@ -161,9 +161,21 @@ def read_fields(fin, beg=0, end=None, sep=1, frame_idx0=1, single_file=False):
                     break
 
 
+def read_last_frame(fin):
+    para = get_para(fin)
+    files = get_files(para)
+    f_last = files[-1]
+    tot_frames = np.sum(get_nframe(files))
+    last_file_frames = get_nframe(f_last)
+    # print(tot_frames, last_file_frames)
+    frames = read_one_file(f_last, last_file_frames-1, None, 1, tot_frames-1)
+    return next(frames)
+
+
 if __name__ == "__main__":
     f0 = "fields/9600_2400_0.290_1.000_0.5_411_8_10000_0.bin"
 
-    frames = read_fields(f0, single_file=False, beg=4700, end=4800)
-    for i, frame in enumerate(frames):
-        print(i)
+    # frames = read_fields(f0, single_file=False, beg=4700, end=4800)
+    # for i, frame in enumerate(frames):
+    #     print(i)
+    t, rho, vx, vy = read_last_frame(f0)

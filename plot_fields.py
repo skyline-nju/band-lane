@@ -2,7 +2,7 @@ import os
 import numpy as np
 import matplotlib.pyplot as plt
 import glob
-import sys
+# import sys
 from matplotlib.colors import hsv_to_rgb
 from read_fields import get_para, read_fields
 
@@ -163,12 +163,13 @@ def plot_momentum(rho, vx, vy, t, para, figsize=(12, 7.5), fout=None):
     RGB = map_v_to_rgb(theta, module, m_max=vmax)
     ax.imshow(RGB, extent=box, origin="lower")
 
-    title_suffix = r"\eta=%g,\rho_0=%g,v_0=%g,{\rm seed}=%d,t=%d" % (
-        para["eta"], para["rho0"], para["v0"], para["seed"], t)
+    title_suffix = r"\eta=%g,\rho_0=%g,v_0=%g,{\rm seed}=%d" % (
+        para["eta"], para["rho0"], para["v0"], para["seed"])
     if para["Lx"] == para["Ly"]:
         plt.tight_layout(rect=[0, 0, 1, 0.95])
         title = r"$L=%d,%s$" % (para["Lx"], title_suffix)
         plt.suptitle(title, y=0.995, fontsize="x-large")
+        ax.set_title(r"$t=%g$" % t, fontsize="large", color="tab:red")
         fig.subplots_adjust(right=0.85)
         bbox = ax.get_position().get_points().flatten()
         # bbox = [xmin, ymin, xmax, ymax]
@@ -178,15 +179,29 @@ def plot_momentum(rho, vx, vy, t, para, figsize=(12, 7.5), fout=None):
         bbox[1] += 0.05
         bbox[3] = bbox[3] - bbox[1] - 0.1
     else:
-        plt.tight_layout(rect=[-0.01, -0.05, 1, 0.98])
-        title = r"$L_x=%d,L_y=%d,%s$" % (para["Lx"], para["Ly"], title_suffix)
-        plt.suptitle(title, y=0.999, fontsize="x-large")
+        if para["Lx"] // para["Ly"] == 2:
+            plt.tight_layout(rect=[-0.01, -0.1, 1, 0.98])
+            title = r"$L_x=%d,L_y=%d,%s$" % (para["Lx"], para["Ly"],
+                                             title_suffix)
+            plt.suptitle(title, y=0.999, fontsize="x-large")
+            ax.set_title(r"$t=%g$" % t, fontsize="large", color="tab:red")
+        elif para["Lx"] == 7200 and para["Ly"] == 4800:
+            plt.tight_layout(rect=[0, -0.025, 1, 0.975])
+            title = r"$L_x=%d,L_y=%d,%s,t=%g$" % (para["Lx"], para["Ly"],
+                                                  title_suffix, t)
+            plt.suptitle(title, y=0.999, fontsize="x-large")
+        else:
+            plt.tight_layout(rect=[-0.01, -0.05, 1, 0.98])
+            title = r"$L_x=%d,L_y=%d,%s,t=%g$" % (para["Lx"], para["Ly"],
+                                                  title_suffix, t)
+            plt.suptitle(title, y=0.999, fontsize="x-large")
+
         fig.subplots_adjust(right=0.875)
         # bbox = [xmin, ymin, xmax, ymax]
         bbox = ax.get_position().get_points().flatten()
         bbox[0] = 0.885
         bbox[2] = 0.06
-        bbox[3] = bbox[3] - bbox[1]
+        bbox[3] = bbox[3] - bbox[1] - 0.05
     cb_ax = fig.add_axes(bbox)
     add_colorbar(cb_ax, vmin, vmax, 0, 360, "v")
 
@@ -232,22 +247,24 @@ def plot_frames(f0,
                 figsize = (12, 2)
             elif para["Lx"] // para["Ly"] == 2:
                 figsize = (8, 4)
+                if para["Ly"] == 3600 and para["Lx"] == 9600:
+                    figsize = (8, 3.2)
+            elif para["Ly"] // para["Lx"] == 2:
+                figsize = (5, 6)
+            elif para["Lx"] == 7200 and para["Ly"] == 4800:
+                figsize = (9, 5.2)
             else:
                 figsize = (8, 4.2)
     if not os.path.exists(folder):
         os.mkdir(folder)
     existed_snap = glob.glob("%s/t=*.%s" % (folder, fmt))
     beg = len(existed_snap)
-    print(beg, "snapshots have existed")
-    # t_beg = (beg + 1) * para["dt"]
-    # frames = read_field_series(f0, beg=beg)
     frames = read_fields(f0, beg=beg)
     for i, (t, rho, vx, vy) in enumerate(frames):
         if save_fig:
             fout = "%s/t=%04d.%s" % (folder, beg + i, fmt)
         else:
             fout = None
-        # t = t_beg + i * para["dt"]
         if which == "both":
             plot_density_momentum(rho, vx, vy, t, para, figsize, fout)
         elif which == "momentum":
@@ -257,65 +274,8 @@ def plot_frames(f0,
 def plot_all_fields_series(pat="*_0.bin", fmt="jpg", data_dir="fields"):
     f0_list = glob.glob(f"fields/{pat}")
     for f0 in f0_list:
-        print(f0)
         plot_frames(f0, True, fmt=fmt, data_dir=data_dir, which="momentum")
 
 
-def set_figsize(n):
-    if n == 0:
-        print("find no matched file")
-        sys.exit()
-    elif n == 1:
-        nrows = 1
-        ncols = 1
-        figsize = (4.5, 3)
-    elif n == 2:
-        nrows = 1
-        ncols = 2
-        figsize = (6, 3)
-    elif n == 3:
-        nrows = 1
-        ncols = 3
-        figsize = (7, 3)
-    elif n == 4:
-        nrows = 1
-        ncols = 4
-        figsize = (9, 3)
-    elif n == 5:
-        nrows = 1
-        ncols = 5
-        figsize = (10, 3)
-    elif n == 6:
-        nrows = 1
-        ncols = 6
-        figsize = (12, 3)
-    elif n <= 12:
-        nrows = 2
-        ncols = 6
-        figsize = (12, 5)
-    elif n <= 18:
-        nrows = 3
-        ncols = 6
-        figsize = (12, 7)
-    elif n <= 24:
-        nrows = 4
-        ncols = 6
-        figsize = (12, 9)
-    elif n <= 30:
-        nrows = 5
-        ncols = 6
-        figsize = (12, 12)
-    elif n <= 36:
-        nrows = 6
-        ncols = 6
-        figsize = (12, 15)
-    else:
-        print("find %s file" % n)
-        sys.exit()
-    return nrows, ncols, figsize
-
-
 if __name__ == "__main__":
-    plot_all_fields_series("*.bin", fmt="jpg")
-
-    # plot_all_last_frames("4800_*_1.0_*_8_*.bin", True)
+    plot_all_fields_series("*_0.bin", fmt="jpg")
